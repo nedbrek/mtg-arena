@@ -15,7 +15,10 @@ proc countBraces {l} {
 }
 
 # foreach line
-for {set l [gets $f]} {![eof $f]} {set l [gets $f]} {
+for {set l [gets $f]} {![eof $f]} {
+		set prev_line $l
+		set l [gets $f]
+	} {
 	set first_brace [string first "\{" $l]
 	if {$first_brace == -1} {
 		continue
@@ -31,6 +34,10 @@ for {set l [gets $f]} {![eof $f]} {set l [gets $f]} {
 	if {$brace_count < 0} {
 		puts "Underflow!"
 	}
-	puts "[lindex $l 0]"
+	if {[string index $l 0] eq "\{"} {
+		puts "[lindex $prev_line 0]"
+	} else {
+		puts "[lindex $l 0]"
+	}
 }
 
