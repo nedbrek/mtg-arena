@@ -1,4 +1,6 @@
 #!/usr/bin/env tclsh
+package require json
+
 set fname [lindex $argv 0]
 set f [open $fname]
 
@@ -34,10 +36,25 @@ for {set l [gets $f]} {![eof $f]} {
 	if {$brace_count < 0} {
 		puts "Underflow!"
 	}
+
 	if {[string index $l 0] eq "\{"} {
-		puts "[lindex $prev_line 0]"
+		set hdr $prev_line
 	} else {
-		puts "[lindex $l 0]"
+		set hdr [string range $l 0 $first_brace-1]
+		set l [string range $l $first_brace end]
+	}
+
+	if {[regexp {PlayerInventory.GetPlayerCards} $hdr]} {
+		if {![regexp {PlayerInventory.GetPlayerCardsV3} $hdr]} {
+			puts "New inventory version: $hdr"
+		}
+		set inv [json::json2dict $l]
+		if {[dict exists $inv payload]} {
+			set inv [dict get $inv payload]
+			puts "Inventory: $inv"
+		}
+	} else {
+		puts "$hdr"
 	}
 }
 
