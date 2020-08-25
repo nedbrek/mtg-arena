@@ -50,6 +50,12 @@ proc printCard {c} {
 	set type_num [dict get $c types]
 	set sup_type_num [dict get $c supertypes]
 
+	set set [dict get $c set]
+	set rarity [dict get $c rarity]
+
+	set set_num [dict get $c collectorNumber]
+	set set_max [dict get $c collectorMax]
+
 	set st_id [dict get $c subtypeTextId]
 	if {$st_id != 0} {
 		set subtype [lookupLoc $st_id]
@@ -79,10 +85,11 @@ proc printCard {c} {
 	}
 
 	if {$subtype ne ""} {
-		puts "$type - $subtype"
+		puts -nonewline "$type - $subtype"
 	} else {
-		puts "$type"
+		puts -nonewline "$type"
 	}
+	puts "\t$set $rarity"
 
 	if {0} {
 	if {$sup_type_num eq ""} {
@@ -98,18 +105,22 @@ proc printCard {c} {
 	if {$flavor ne ""} {
 		puts "\"$flavor\""
 	}
+
+	puts -nonewline "$set_num / $set_max"
 	if {$is_creat} {
-		puts "$pow / $tough"
+		puts "\t$pow / $tough"
 	} elseif {$is_plane} {
-		puts "$tough"
+		puts "\t$tough"
 	} elseif {$pow != 0 || $tough != 0} {
 		set sub_type_num [dict get $c subtypes]
 		set is_vehicle [expr {$is_arti && [lsearch $sub_type_num 331] != -1}]
 		if {!$is_vehicle} {
-			puts "Non-creature with pow/tough! $pow / $tough $sub_type_num"
+			puts "\nNon-creature with pow/tough! $pow / $tough $sub_type_num"
 		} else {
-			puts "$pow / $tough"
+			puts "\t$pow / $tough"
 		}
+	} else {
+		puts ""
 	}
 	puts ""
 }
