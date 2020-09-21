@@ -33,6 +33,49 @@ proc lookupLoc {id} {
 	return [dict get $d text]
 }
 
+proc lookupLocDb {db id} {
+	return [$db onecolumn {SELECT value FROM loc WHERE key=$id}]
+}
+
+proc makeLocTable {db} {
+	$db eval {
+		CREATE TABLE loc(
+		   id INTEGER PRIMARY KEY,
+		   key INTEGER not null,
+		   value TEXT not null
+		);
+	}
+}
+
+proc parseLocToDb {fname db} {
+	set f [open $fname]
+	set data [read $f]
+	close $f
+
+	set d [json::json2dict $data]
+
+	set d_english ""
+	foreach di $d {
+		set lang [dict get $di isoCode]
+		if {$lang eq "en-US"} {
+			set d_english $di
+			break
+		}
+	}
+	set loc [dict get $d_english keys]
+
+	$db eval {BEGIN TRANSACTION}
+	foreach l $loc {
+		set k [dict get $l id]
+		set v [dict get $l text]
+		$db eval {
+			INSERT INTO loc(key, value)
+			VALUES ($k, $v)
+		}
+	}
+	$db eval {END TRANSACTION}
+}
+
 proc makeCardTable {db} {
 	$db eval {
 		CREATE TABLE cards(

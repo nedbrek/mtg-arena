@@ -10,8 +10,17 @@ if {$cards eq ""} {
 	exit
 }
 
+set loc [glob -nocomplain [file join $config "data_loc_*.mtga"]]
+if {$loc eq ""} {
+	puts "Can't find localization data"
+	exit
+}
+
 sqlite3 db cards.db
 
 parse::makeCardTable ::db
+parse::makeLocTable ::db
+
 parse::cardsToDb $cards ::db
+parse::parseLocToDb $loc ::db
 
