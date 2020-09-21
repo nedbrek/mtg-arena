@@ -106,7 +106,7 @@ proc printCard {c} {
 		puts "\"$flavor\""
 	}
 
-	puts -nonewline "$set_num / $set_max"
+	puts -nonewline "$set_num"
 	if {$is_creat} {
 		puts "\t$pow / $tough"
 	} elseif {$is_plane} {
