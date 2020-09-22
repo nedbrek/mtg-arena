@@ -80,6 +80,7 @@ proc makeCardTable {db} {
 	$db eval {
 		CREATE TABLE cards(
 		   id INTEGER PRIMARY KEY,
+		   card_id INTEGER not null,
 		   name_id INTEGER not null,
 		   cost TEXT,
 		   types TEXT not null,
@@ -106,6 +107,7 @@ proc cardsToDb {fname db} {
 	# run through all cards
 	$db eval {BEGIN TRANSACTION}
 	foreach c $d {
+		set card_id      [dict get $c grpid]
 		set name         [dict get $c titleId]
 		set cost         [dict get $c castingcost]
 		set type_num     [dict get $c types]
@@ -136,33 +138,33 @@ proc cardsToDb {fname db} {
 		if {$is_land} {
 			# land has no cost
 			$db eval {
-				INSERT INTO cards(name_id, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, abilities)
-				VALUES           ($name, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $abilities);
+				INSERT INTO cards(card_id, name_id, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, abilities)
+				VALUES           ($card_id, $name, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $abilities);
 			}
 		} elseif {$is_creat} {
 			# creatures have power and toughness
 			$db eval {
-				INSERT INTO cards(name_id, cost, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, power, toughness, abilities)
-				VALUES           ($name, $cost, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $pow, $tough, $abilities);
+				INSERT INTO cards(card_id, name_id, cost, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, power, toughness, abilities)
+				VALUES           ($card_id, $name, $cost, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $pow, $tough, $abilities);
 			}
 		} elseif {$is_plane} {
 			# planeswalkers have toughness (loyalty)
 			$db eval {
-				INSERT INTO cards(name_id, cost, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, toughness, abilities)
-				VALUES           ($name, $cost, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $tough, $abilities);
+				INSERT INTO cards(card_id, name_id, cost, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, toughness, abilities)
+				VALUES           ($card_id, $name, $cost, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $tough, $abilities);
 			}
 		} elseif {$pow != 0 || $tough != 0} {
 			set is_vehicle [expr {$is_arti && [lsearch $sub_type_num 331] != -1}]
 			# same as creature
 			$db eval {
-				INSERT INTO cards(name_id, cost, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, power, toughness, abilities)
-				VALUES           ($name, $cost, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $pow, $tough, $abilities);
+				INSERT INTO cards(card_id, name_id, cost, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, power, toughness, abilities)
+				VALUES           ($card_id, $name, $cost, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $pow, $tough, $abilities);
 			}
 		} else {
 			# others have cost
 			$db eval {
-				INSERT INTO cards(name_id, cost, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, abilities)
-				VALUES           ($name, $cost, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $abilities);
+				INSERT INTO cards(card_id, name_id, cost, types, sup_types, sub_types, set_name, rarity, set_num, flavor_id, abilities)
+				VALUES           ($card_id, $name, $cost, $type_num, $sup_type_num, $sub_type_num, $set, $rarity, $set_num, $favor, $abilities);
 			}
 		}
 	}

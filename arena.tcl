@@ -1,56 +1,17 @@
 #!/usr/bin/env tclsh
+lappend ::auto_path [file dirname $argv0]
 package require json
 package require sqlite3
 package require struct::set
+package require arena_parse
 
 ### variables
 set config "config"
 
+sqlite3 db cards.db
+puts "Read [db onecolumn {SELECT COUNT(name_id) FROM cards}] cards"
+
 proc loadConfig {config} {
-	set loc [glob -nocomplain [file join $config "data_loc_*.mtga"]]
-	set cards [glob -nocomplain [file join $config "data_cards_*.mtga"]]
-	if {$loc eq "" || $cards eq ""} {
-		return 1
-	}
-
-	# parse localizations
-	set f [open $loc]
-	set loc_raw [read $f]
-	close $f
-	set loc_d [json::json2dict $loc_raw]
-
-	set d_english ""
-	foreach di $loc_d {
-		set lang [dict get $di isoCode]
-		if {$lang eq "en-US"} {
-			set d_english $di
-			break
-		}
-	}
-
-	set loc [dict get $d_english keys]
-	foreach l $loc {
-		set id [dict get $l id]
-		set ::local_str($id) [dict get $l text]
-	}
-	unset loc
-	unset loc_d
-	unset loc_raw
-
-	# parse card definitions
-	set f [open $cards]
-	set cards_raw [read $f]
-	close $f
-	set cards_d [json::json2dict $cards_raw]
-
-	foreach c $cards_d {
-		set id [dict get $c grpid]
-		set ::cards($id) $c
-	}
-	unset cards_d
-	unset cards_raw
-	puts "Read [array size ::cards] cards"
-
 	return 0
 }
 
@@ -139,12 +100,14 @@ for {set l [gets $f]} {![eof $f]} {
 			}
 
 			foreach {id cnt} $inv {
-				set c $::cards($id)
-				set name $::local_str([dict get $c titleId])
-				set rarity [dict get $c rarity]
-				set set [dict get $c set]
-				set set_num [dict get $c collectorNumber]
-				puts "$cnt x $name ($set $rarity $set_num)"
+				db eval {
+					SELECT name_id, set_name, rarity, set_num
+					FROM cards
+					WHERE card_id = $id
+				} {
+					set name [parse::lookupLocDb ::db $name_id]
+					puts "$cnt x $name ($set_name $rarity $set_num)"
+				}
 			}
 		}
 	} else {
