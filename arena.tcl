@@ -11,6 +11,19 @@ set config "config"
 sqlite3 db cards.db
 puts "Read [db onecolumn {SELECT COUNT(name_id) FROM cards}] cards"
 
+if {[glob -nocomplain inv.db] eq ""} {
+	sqlite3 inv_db inv.db
+	inv_db eval {
+		CREATE TABLE inv(
+		   id INTEGER PRIMARY KEY,
+		   card_id INTEGER not null,
+		   count INTEGER not null
+		);
+	}
+} else {
+	sqlite3 inv_db inv.db
+}
+
 proc loadConfig {config} {
 	return 0
 }
@@ -72,6 +85,7 @@ for {set l [gets $f]} {![eof $f]} {
 		set inv [json::json2dict $l]
 		if {[dict exists $inv payload]} {
 			set inv [dict get $inv payload]
+			set last_inv $inv
 			if {$cur_inv ne ""} {
 				# strip out counts
 				set k_inv [dict keys $inv]
@@ -85,7 +99,7 @@ for {set l [gets $f]} {![eof $f]} {
 				if {$new_cards ne $diff} {
 					puts "Cards lost?"
 				} else {
-					puts "Additional cards:"
+					#puts "Additional cards:"
 				}
 				set new_inv [list]
 				foreach k $diff {
@@ -95,7 +109,7 @@ for {set l [gets $f]} {![eof $f]} {
 				}
 				set inv $new_inv
 			} else {
-				puts "Inventory:"
+				#puts "Inventory:"
 				set cur_inv $inv
 			}
 
@@ -106,12 +120,66 @@ for {set l [gets $f]} {![eof $f]} {
 					WHERE card_id = $id
 				} {
 					set name [parse::lookupLocDb ::db $name_id]
-					puts "$cnt x $name ($set_name $rarity $set_num)"
+					#puts "$cnt x $name ($set_name $rarity $set_num)"
 				}
 			}
 		}
 	} else {
-		puts "$hdr $l"
+		#puts "$hdr $l"
 	}
 }
+# end of log parsing
+
+inv_db eval {BEGIN TRANSACTION}
+foreach {id cnt} $last_inv {
+	set data [inv_db eval {
+		SELECT id, count
+		FROM inv
+		WHERE card_id = $id
+	}]
+	if {$data eq ""} {
+		# new card
+		# pull data
+		db eval {
+			SELECT name_id, set_name, rarity, set_num
+			FROM cards
+			WHERE card_id = $id
+		} {
+			set name [parse::lookupLocDb ::db $name_id]
+			#puts "New card: $cnt x $name ($set_name $rarity $set_num)"
+		}
+
+		# add to inventory
+		inv_db eval {
+			INSERT INTO inv(card_id, count)
+			VALUES($id, $cnt)
+		}
+	} else {
+		set db_id   [lindex $data 0]
+		set old_cnt [lindex $data 1]
+		if {$old_cnt == $cnt} {
+			continue
+		}
+
+		# pull card data
+		db eval {
+			SELECT name_id, set_name, rarity, set_num
+			FROM cards
+			WHERE card_id = $id
+		} {
+			set name [parse::lookupLocDb ::db $name_id]
+			if {$old_cnt > $cnt} {
+				puts "Lost card? $cnt x $name ($set_name $rarity $set_num)"
+			} elseif {$old_cnt < $cnt} {
+				#puts "Add card: $cnt x $name ($set_name $rarity $set_num)"
+			}
+
+			inv_db eval {
+				UPDATE inv SET count=$cnt WHERE id=$db_id
+			}
+		}
+
+	}
+}
+inv_db eval {END TRANSACTION}
 

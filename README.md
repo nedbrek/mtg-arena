@@ -6,3 +6,10 @@ The configuration files are named `data_loc_${SHA}.mtga` and `data_cards_${SHA}.
 To run:
 `tclsh config.tcl $loc $cards`
 
+Or:
+```
+tclsh makeCardDb.tcl
+./arena.tcl <logfile>
+./checklist.tcl
+```
+
