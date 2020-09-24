@@ -6,7 +6,15 @@ package require struct::set
 package require arena_parse
 
 ### variables
-set config "config"
+set root [lindex [file volumes] 0]
+set path {{Program Files} {Wizards of the Coast} {MTGA} {MTGA_Data} {Logs} {Logs}}
+set files [glob -nocomplain [file join $root {*}$path UTC_Log*]]
+
+if {$files eq ""} {
+	set fname [lindex $argv 0]
+} else {
+	set fname [tk_getOpenFile -initialdir [file join $root {*}$path]]
+}
 
 sqlite3 db cards.db
 puts "Read [db onecolumn {SELECT COUNT(name_id) FROM cards}] cards"
@@ -24,10 +32,6 @@ if {[glob -nocomplain inv.db] eq ""} {
 	sqlite3 inv_db inv.db
 }
 
-proc loadConfig {config} {
-	return 0
-}
-
 ### helper functions
 proc countBraces {l} {
 	set brace_count 0
@@ -42,12 +46,9 @@ proc countBraces {l} {
 }
 
 ### parse log
-loadConfig $config
+set f [open $fname]
 
 set cur_inv [list]
-
-set fname [lindex $argv 0]
-set f [open $fname]
 
 # foreach line
 for {set l [gets $f]} {![eof $f]} {

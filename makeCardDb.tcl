@@ -2,7 +2,14 @@ lappend ::auto_path [file dirname $argv0]
 package require arena_parse
 package require sqlite3
 
-set config "config"
+set root [lindex [file volumes] 0]
+set path {{Program Files} {Wizards of the Coast} {MTGA} {MTGA_Data} {Downloads} {Data}}
+set files [glob -nocomplain [file join $root {*}$path data_loc*.mtga]]
+if {$files eq ""} {
+	set config [file join $root {*}$path]
+} else {
+	set config "config"
+}
 
 set cards [glob -nocomplain [file join $config "data_cards_*.mtga"]]
 if {$cards eq ""} {
