@@ -95,6 +95,7 @@ set last_set ""
 set last_rare ""
 set set_node ""
 set last_node ""
+set last_card ""
 db eval {
 	SELECT card_id, getName(name_id) as name, rarity, set_name, set_num
 	FROM cards
@@ -105,21 +106,44 @@ db eval {
 
 	if {$last_set ne $set_name} {
 		set set_name $set_name
-		# TODO translate
+		# translate
 		set real_name $set_name
 		if {[dict exists $set_names $set_name]} {
 			set real_name [dict get $set_names $set_name]
 		}
 		set set_node [$w insert {} end -text $real_name]
 		set last_node [$w insert $set_node end -text [lindex $rare_names $rarity]]
+		set last_card ""
 	} elseif {$last_rare != $rarity} {
 		set last_node [$w insert $set_node end -text [lindex $rare_names $rarity]]
+		set last_card ""
 	}
 
-	$w insert $last_node end -text $name -values [list $set_name $rarity $count $total $set_num $card_id]
+	# check for alternate art
+	if {$name eq $last_card} {
+		set vals [$w item $prev_item -values]
+		set prev_ct [lindex $vals 2]
+		if {$prev_ct ne ""} {
+			if {$count eq ""} {
+				set count $prev_ct
+			} else {
+				incr count $prev_ct
+			}
+		}
+
+		set old_set_num [lindex $vals 4]
+		set set_num "$old_set_num $set_num"
+		set cid [lindex $vals 5]
+		lappend cid $card_id
+
+		$w item $prev_item -values [list $set_name $rarity $count $total $set_num $cid]
+	} else {
+		set prev_item [$w insert $last_node end -text $name -values [list $set_name $rarity $count $total $set_num $card_id]]
+	}
 
 	set last_rare $rarity
 	set last_set $set_name
+	set last_card $name
 }
 
 # foreach set
