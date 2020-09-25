@@ -12,13 +12,13 @@ if {$files ne ""} {
 	set config "config"
 }
 
-set cards [glob -nocomplain [file join $config "data_cards_*.mtga"]]
+set cards [lindex [glob -nocomplain [file join $config "data_cards_*.mtga"]] 0]
 if {$cards eq ""} {
 	puts "Can't find card data"
 	exit
 }
 
-set loc [glob -nocomplain [file join $config "data_loc_*.mtga"]]
+set loc [lindex [glob -nocomplain [file join $config "data_loc_*.mtga"]] 0]
 if {$loc eq ""} {
 	puts "Can't find localization data"
 	exit
