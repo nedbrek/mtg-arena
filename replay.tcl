@@ -2,7 +2,6 @@
 lappend ::auto_path [file dirname $argv0]
 package require json
 package require sqlite3
-package require struct::set
 package require arena_parse
 
 ### variables
@@ -73,6 +72,12 @@ set ignore_actions {
 	"ActionType_Activate_Mana"
 }
 
+set player  0
+set turn_no 0
+set phase   0
+set step    0
+set print_phase 1
+
 # foreach line
 for {set l [gets $f]} {![eof $f]} {
 		set prev_line $l
@@ -118,23 +123,14 @@ for {set l [gets $f]} {![eof $f]} {
 			if {$at in $ignore_actions} {
 				continue
 			}
-			set verb ""
 			if {$at eq "ActionType_Play"} {
-				set verb "Plays"
 			} elseif {$at eq "ActionType_CastLeft"} {
-				set verb "Casts (left)"
 			} elseif {$at eq "ActionType_Cast"} {
-				set verb "Casts"
 			} elseif {$at eq "ActionType_Activate"} {
-				set verb "Activates"
-			}
-			if {$verb eq ""} {
+			} else {
 				puts "Unknown action type in '$a'"
 				continue
 			}
-			set card_id [dict get $a "grpId"]
-			set name_id [::db onecolumn {SELECT name_id FROM cards WHERE card_id=$card_id}]
-			puts "$verb [parse::lookupLocDb ::db $name_id]"
 		}
 	} elseif {[regexp {GreToClientEvent} $hdr]} {
 		set event [json::json2dict $l]
@@ -187,24 +183,71 @@ for {set l [gets $f]} {![eof $f]} {
 				}
 
 				set turn_info [dGet $msg "turnInfo"]
+				if {[dict exists $turn_info "activePlayer"]} {
+					set p  [dict get $turn_info "activePlayer"]
+					if {$p != $player} {
+						set player $p
+						set print_phase 1
+					}
+				}
+				if {[dict exists $turn_info "turnNumber"]} {
+					set tturn  [dict get $turn_info "turnNumber"]
+					set tphase [dict get $turn_info "phase"]
+					set tstep  [dGet $turn_info "step"]
+
+					if {$tturn != $turn_no || $tphase ne $phase || $tstep ne $step} {
+						set turn_no $tturn
+						set phase   $tphase
+						set step    $tstep
+						set print_phase 1
+					}
+				}
 
 				set anno [dGet $msg "annotations"]
-				set first 1
 				foreach a $anno {
 					set type [dict get $a "type"]
+
+					set zone_xfer_i [lsearch $type "AnnotationType_ZoneTransfer"]
+					if {$zone_xfer_i != -1} {
+						set details [dict get $a "details"]
+						foreach d $details {
+							if {[dict get $d "key"] eq "category"} {
+								set action [dict get $d "valueString"]
+								set verb ""
+
+								if {$action eq "PlayLand"} {
+									set verb "Plays"
+								} elseif {$action eq "CastSpell"} {
+									set verb "Casts"
+								}
+
+								if {$verb ne ""} {
+									if {$print_phase} {
+										if {$step ne ""} {
+											puts "Player $player, turn $turn_no, $phase, $step"
+										} else {
+											puts "Player $player, turn $turn_no, $phase"
+										}
+										set print_phase 0
+									}
+									set aff_ids [dict get $a "affectedIds"]
+									if {[llength $aff_ids] != 1} {
+										puts "Bad affectedIds in '$e'"
+									}
+									set instance [lindex $aff_ids 0]
+									set card_id [dict get $game_objs $instance card_id]
+									set name_id [::db onecolumn {SELECT name_id FROM cards WHERE card_id=$card_id}]
+									puts "   $verb [parse::lookupLocDb ::db $name_id]"
+								}
+							}
+						}
+					}
+
 					set dam_anno_i [lsearch $type "AnnotationType_DamageDealt"]
 					if {$dam_anno_i != -1} {
-						if {$first} {
-							if {![dict exists $turn_info "activePlayer"]} {
-								continue
-							} else {
-								set player  [dict get $turn_info "activePlayer"]
-								set turn_no [dict get $turn_info "turnNumber"]
-								set phase   [dict get $turn_info "phase"]
-								set step    [dict get $turn_info "step"]
-								puts "Player $player, turn $turn_no, $phase, $step"
-							}
-							set first 0
+						if {$print_phase} {
+							puts "Player $player, turn $turn_no, $phase, $step"
+							set print_phase 0
 						}
 						set instance [dict get $a "affectorId"]
 						set tgt [lindex [dict get $a "affectedIds"] 0]
