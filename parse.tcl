@@ -171,6 +171,69 @@ proc cardsToDb {fname db} {
 	$db eval {END TRANSACTION}
 }
 
+proc countBraces {l} {
+	set brace_count 0
+	foreach c [split $l ""] {
+		if {$c eq "\{"} {
+			incr brace_count
+		} elseif {$c eq "\}"} {
+			incr brace_count -1
+		}
+	}
+	return $brace_count
+}
+
+proc processFile {fname args} {
+	set f [open $fname]
+
+	for {set l [gets $f]} {![eof $f]} {
+		set prev_line $l
+		set l [gets $f]
+	} {
+		set first_brace [string first "\{" $l]
+		if {$first_brace == -1} {
+			continue
+		}
+
+		set brace_count [countBraces $l]
+		while {![eof $f] && $brace_count > 0} {
+			set nextline [gets $f]
+			append l $nextline
+			incr brace_count [countBraces $nextline]
+		}
+
+		if {$brace_count < 0} {
+			puts "Underflow!"
+		}
+
+		if {[string index $l 0] eq "\{"} {
+			set hdr $prev_line
+		} else {
+			set hdr [string range $l 0 $first_brace-1]
+			set l [string range $l $first_brace end]
+		}
+
+		foreach {hdrpat linename body} $args {
+			if {![regexp $hdrpat $hdr]} {
+				continue
+			}
+			upvar $linename ol
+			set ol $l
+			set code [catch {uplevel 1 $body} message]
+			switch -- $code {
+				0 {}
+				1 { return -code error -errorinfo $::errorInfo -errorcode $::errorCode $message }
+				2 { return -code return $message }
+				3 break
+				4 continue
+				default { return -code $code $message }
+			}
+		}
+	}
+
+	close $f
+}
+
 # end namespace
 }
 

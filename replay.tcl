@@ -26,21 +26,7 @@ proc dGet {d k} {
 	return ""
 }
 
-proc countBraces {l} {
-	set brace_count 0
-	foreach c [split $l ""] {
-		if {$c eq "\{"} {
-			incr brace_count
-		} elseif {$c eq "\}"} {
-			incr brace_count -1
-		}
-	}
-	return $brace_count
-}
-
 ### parse log
-set f [open $fname]
-
 set game_objs [dict create]
 set p_life [dict create]
 
@@ -79,35 +65,9 @@ set step    0
 set print_phase 1
 
 # foreach line
-for {set l [gets $f]} {![eof $f]} {
-		set prev_line $l
-		set l [gets $f]
-	} {
-	set first_brace [string first "\{" $l]
-	if {$first_brace == -1} {
-		continue
-	}
-
-	set brace_count [countBraces $l]
-	while {![eof $f] && $brace_count > 0} {
-		set nextline [gets $f]
-		append l $nextline
-		incr brace_count [countBraces $nextline]
-	}
-
-	if {$brace_count < 0} {
-		puts "Underflow!"
-	}
-
-	if {[string index $l 0] eq "\{"} {
-		set hdr $prev_line
-	} else {
-		set hdr [string range $l 0 $first_brace-1]
-		set l [string range $l $first_brace end]
-	}
-
-	if {[regexp {PlayerInventory.GetPlayerCards} $hdr]} {
-	} elseif {[regexp {ClientToMatchServiceMessageType_ClientToGREMessage} $hdr]} {
+parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
+		# inventory code is in arena.tcl for now
+	} {ClientToMatchServiceMessageType_ClientToGREMessage} l {
 		set msg [json::json2dict $l]
 		set type [dict get $msg "payload" "type"]
 		if {$type in $ignore_msgs} {
@@ -132,7 +92,7 @@ for {set l [gets $f]} {![eof $f]} {
 				continue
 			}
 		}
-	} elseif {[regexp {GreToClientEvent} $hdr]} {
+	} {GreToClientEvent} l {
 		set event [json::json2dict $l]
 		set event [dict get $event "greToClientEvent"]
 		set events [dict get $event "greToClientMessages"]
@@ -291,9 +251,6 @@ for {set l [gets $f]} {![eof $f]} {
 				puts "Life totals: $p_life"
 			}
 		}
-	} else {
-		#puts "$hdr $l"
 	}
-}
 # end of log parsing
 
