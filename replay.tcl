@@ -87,14 +87,16 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 			} elseif {$at eq "ActionType_CastLeft"} {
 			} elseif {$at eq "ActionType_Cast"} {
 			} elseif {$at eq "ActionType_Activate"} {
+			} elseif {$at eq "ActionType_CastAdventure"} {
+			} elseif {$at eq "ActionType_PlayMDFC"} {
 			} else {
 				puts "Unknown action type in '$a'"
 				continue
 			}
 		}
 	} {GreToClientEvent} l {
-		set event [json::json2dict $l]
-		set event [dict get $event "greToClientEvent"]
+		set oe [json::json2dict $l]
+		set event [dict get $oe "greToClientEvent"]
 		set events [dict get $event "greToClientMessages"]
 		foreach e $events {
 			set type [dict get $e "type"]
@@ -106,7 +108,8 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 					append txt " roll [dict get $r "rollValue"]"
 				}
 				puts "\nStart game:$txt"
-			} elseif {$type eq "GREMessageType_GameStateMessage"} {
+			} elseif {$type eq "GREMessageType_GameStateMessage" ||
+			    $type eq "GREMessageType_QueuedGameStateMessage"} {
 				set msg [dict get $e "gameStateMessage"]
 
 				set game_info [dGet $e "gameInfo"]
