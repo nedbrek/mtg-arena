@@ -107,7 +107,7 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 					append txt " seat [dict get $r "systemSeatId"]"
 					append txt " roll [dict get $r "rollValue"]"
 				}
-				puts "\nStart game:$txt"
+				puts "Start game:$txt"
 			} elseif {$type eq "GREMessageType_GameStateMessage" ||
 			    $type eq "GREMessageType_QueuedGameStateMessage"} {
 				set msg [dict get $e "gameStateMessage"]
@@ -254,6 +254,25 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 				puts "Life totals: $p_life"
 			}
 		}
+	} {MatchGameRoomStateChangedEvent} l {
+		set oe [json::json2dict $l]
+		set game_info [dict get $oe "matchGameRoomStateChangedEvent" "gameRoomInfo"]
+		if {[dict get $game_info "stateType"] ne "MatchGameRoomStateType_Playing"} {
+			continue
+		}
+		set players [dict get $game_info "gameRoomConfig" "reservedPlayers"]
+		puts -nonewline "\nMatch between"
+		set first 1
+		foreach p $players {
+			set name [dict get $p "playerName"]
+			set seat [dict get $p "systemSeatId"]
+			if {!$first} {
+				puts -nonewline " and"
+			}
+			set first 0
+			puts -nonewline " $name (player $seat)"
+		}
+		puts ""
 	}
 # end of log parsing
 
