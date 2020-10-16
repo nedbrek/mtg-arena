@@ -1,18 +1,197 @@
-#!/usr/bin/env tclsh
+#!/usr/bin/env wish
 lappend ::auto_path [file dirname $argv0]
 package require json
 package require sqlite3
 package require arena_parse
+package require Itcl
+
+wm withdraw .
+
+### class definitions
+itcl::class Logger {
+	method startGame {players} { puts "Pure virtual called!"; exit }
+	method dieRolls {rolls} { puts "Pure virtual called!"; exit }
+	method setPhase {player turn_no phase step} { puts "Pure virtual called!"; exit }
+	method addLine {verb name card_id} { puts "Pure virtual called!"; exit }
+	method hitPlayer {card_name tgt damage life} { puts "Pure virtual called!"; exit }
+	method hitCard {card_name tgt damage} { puts "Pure virtual called!"; exit }
+	method gameOver {winner reason {p_life {}}} { puts "Pure virtual called!"; exit }
+}
+
+itcl::class ConsoleLogger {
+	inherit Logger
+
+	destructor {
+		exit
+	}
+
+	method startGame {players} {
+		puts -nonewline "\nMatch between"
+		set first 1
+		foreach p $players {
+			set name [dict get $p "playerName"]
+			set seat [dict get $p "systemSeatId"]
+			if {!$first} {
+				puts -nonewline " and"
+			}
+			set first 0
+			puts -nonewline " $name (player $seat)"
+		}
+		puts ""
+	}
+
+	method dieRolls {rolls} {
+		set txt ""
+		foreach r $rolls {
+			append txt " seat [dict get $r "systemSeatId"]"
+			append txt " roll [dict get $r "rollValue"]"
+		}
+		puts "Start game:$txt"
+	}
+
+	method setPhase {player turn_no phase step} {
+		if {$step ne ""} {
+			puts "Player $player, turn $turn_no, $phase, $step"
+		} else {
+			puts "Player $player, turn $turn_no, $phase"
+		}
+	}
+
+	method addLine {verb name card_id} {
+		puts "   $verb $name"
+	}
+
+	method hitPlayer {card_name tgt damage life} {
+		puts "   $card_name hits player $tgt for $damage, life is $life"
+	}
+
+	method hitCard {card_name tgt damage} {
+		puts "   $card_name hits $tgt for $damage"
+	}
+
+	method gameOver {winner reason {p_life {}}} {
+		if {$reason eq "ResultReason_Game"} {
+			puts "Game over: Player $winner wins"
+		} elseif {$reason eq "ResultReason_Concede"} {
+			puts "Game over: Player $winner wins (other player concedes)"
+		} else {
+			puts "Game over: Player $winner wins, $reason"
+		}
+
+		if {$p_life ne ""} {
+			puts "Life totals: $p_life"
+		}
+	}
+}
+
+set t_card_num 0
+
+proc selectCardFromView {w} {
+	set w .t.fAll.tv
+	set cur [$w selection]
+	set values [$w item $cur -values]
+	set card_id [lindex $values 0]
+	parse::showCard ::db $card_id
+}
+
+itcl::class WidgetLogger {
+	inherit Logger
+
+	variable game_row ""
+	variable insert_row ""
+
+	constructor {} {
+		toplevel .t
+		wm title .t "Game Log"
+		bind .t <Destroy> {exit}
+
+		set w .t.fAll.tv
+		pack [frame .t.fAll] -expand 1 -fill both
+		pack [ttk::treeview $w -yscrollcommand ".t.fAll.vs set"] -side left -expand 1 -fill both
+		pack [scrollbar .t.fAll.vs -command "$w yview" -orient vertical] -side left -fill y
+
+		bind $w <Double-1> [list selectCardFromView %W]
+	}
+
+	method startGame {players} {
+		set first 1
+		set txt ""
+		foreach p $players {
+			set name [dict get $p "playerName"]
+			set seat [dict get $p "systemSeatId"]
+			if {!$first} {
+				append txt ", "
+			}
+			set first 0
+			append txt "$name (player $seat)"
+		}
+		set w .t.fAll.tv
+		set game_row [$w insert {} end -text $txt]
+	}
+
+	method dieRolls {rolls} {
+		set txt ""
+		foreach r $rolls {
+			append txt "seat [dict get $r "systemSeatId"] "
+			append txt "roll [dict get $r "rollValue"] "
+		}
+		set w .t.fAll.tv
+		$w insert $game_row end -text "$txt"
+	}
+
+	method setPhase {player turn_no phase step} {
+		set txt ""
+		if {$step ne ""} {
+			set txt "Player $player, turn $turn_no, $phase, $step"
+		} else {
+			set txt "Player $player, turn $turn_no, $phase"
+		}
+		set w .t.fAll.tv
+		set insert_row [$w insert $game_row end -text "$txt" -open 1]
+	}
+
+	method addLine {verb name card_id} {
+		set w .t.fAll.tv
+		$w insert $insert_row end -text "$verb $name" -values $card_id
+	}
+
+	method hitPlayer {card_name tgt damage life} {
+		set w .t.fAll.tv
+		$w insert $insert_row end -text "$card_name hits player $tgt for $damage, life is $life"
+	}
+
+	method hitCard {card_name tgt damage} {
+		set w .t.fAll.tv
+		$w insert $insert_row end -text "$card_name hits $tgt for $damage"
+	}
+
+	method gameOver {winner reason {p_life {}}} {
+		set w .t.fAll.tv
+		set txt ""
+		if {$reason eq "ResultReason_Game"} {
+			set txt "Game over: Player $winner wins"
+		} elseif {$reason eq "ResultReason_Concede"} {
+			set txt "Game over: Player $winner wins (other player concedes)"
+		} else {
+			set txt "Game over: Player $winner wins, $reason"
+		}
+		$w insert $insert_row end -text $txt
+
+		if {$p_life ne ""} {
+			$w insert $insert_row end -text "Life totals: $p_life"
+		}
+	}
+}
 
 ### variables
-set root [lindex [file volumes] 0]
-set path {{Program Files} {Wizards of the Coast} {MTGA} {MTGA_Data} {Logs} {Logs}}
-set files [glob -nocomplain [file join $root {*}$path UTC_Log*]]
-
-if {$files eq ""} {
+if {$argv ne ""} {
 	set fname [lindex $argv 0]
+	set logger [ConsoleLogger #auto]
 } else {
+	set root [lindex [file volumes] 0]
+	set path {{Program Files} {Wizards of the Coast} {MTGA} {MTGA_Data} {Logs} {Logs}}
 	set fname [tk_getOpenFile -initialdir [file join $root {*}$path]]
+	set logger [WidgetLogger #auto]
 }
 
 sqlite3 db cards.db
@@ -101,13 +280,7 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 		foreach e $events {
 			set type [dict get $e "type"]
 			if {$type eq "GREMessageType_DieRollResultsResp"} {
-				set rolls [dict get $e "dieRollResultsResp" "playerDieRolls"]
-				set txt ""
-				foreach r $rolls {
-					append txt " seat [dict get $r "systemSeatId"]"
-					append txt " roll [dict get $r "rollValue"]"
-				}
-				puts "Start game:$txt"
+				$::logger dieRolls [dict get $e "dieRollResultsResp" "playerDieRolls"]
 			} elseif {$type eq "GREMessageType_GameStateMessage" ||
 			    $type eq "GREMessageType_QueuedGameStateMessage"} {
 				set msg [dict get $e "gameStateMessage"]
@@ -118,14 +291,8 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 					set results [dict get $game_stage "results"]
 					set winner [dict get $msg "winningTeamId"]
 					set reason [dict get $results "reason"]
+					$::logger gameOver $winner $reason
 
-					if {$reason eq "ResultReason_Game"} {
-						puts "Game over: Player $winner wins"
-					} elseif {$reason eq "ResultReason_Concede"} {
-						puts "Game over: Player $winner wins (other player concedes)"
-					} else {
-						puts "Game over: Player $winner wins, $reason"
-					}
 					continue
 				}
 
@@ -182,15 +349,13 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 									set verb "Plays"
 								} elseif {$action eq "CastSpell"} {
 									set verb "Casts"
+								} elseif {$action eq "Discard"} {
+									set verb "Discards"
 								}
 
 								if {$verb ne ""} {
 									if {$print_phase} {
-										if {$step ne ""} {
-											puts "Player $player, turn $turn_no, $phase, $step"
-										} else {
-											puts "Player $player, turn $turn_no, $phase"
-										}
+										$::logger setPhase $player $turn_no $phase $step
 										set print_phase 0
 									}
 									set aff_ids [dict get $a "affectedIds"]
@@ -200,7 +365,7 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 									set instance [lindex $aff_ids 0]
 									set card_id [dict get $game_objs $instance card_id]
 									set name_id [::db onecolumn {SELECT name_id FROM cards WHERE card_id=$card_id}]
-									puts "   $verb [parse::lookupLocDb ::db $name_id]"
+									$::logger addLine $verb [parse::lookupLocDb ::db $name_id] $card_id
 								}
 							}
 						}
@@ -209,7 +374,7 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 					set dam_anno_i [lsearch $type "AnnotationType_DamageDealt"]
 					if {$dam_anno_i != -1} {
 						if {$print_phase} {
-							puts "Player $player, turn $turn_no, $phase, $step"
+							$::logger setPhase $player $turn_no $phase $step
 							set print_phase 0
 						}
 						set instance [dict get $a "affectorId"]
@@ -226,15 +391,15 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 						set card_id [dict get $game_objs $instance card_id]
 						set name_id [::db onecolumn {SELECT name_id FROM cards WHERE card_id=$card_id}]
 						set card_name [parse::lookupLocDb ::db $name_id]
-						puts -nonewline "   $card_name hits "
+
 						if {[dict exists $p_life $tgt]} {
 							set l [dict get $p_life $tgt]
-							puts "player $tgt for $damage, life is $l"
+							$::logger hitPlayer $card_name $tgt $damage $l
 						} else {
 							set target_id [dict get $game_objs $tgt card_id]
 							set tname_id [::db onecolumn {SELECT name_id FROM cards WHERE card_id=$target_id}]
 							set tcard_name [parse::lookupLocDb ::db $tname_id]
-							puts "$tcard_name for $damage"
+							$::logger hitCard $card_name $tcard_name $damage
 						}
 					}
 				}
@@ -243,15 +408,7 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 				set msg [dict get $e "intermissionReq"]
 				set winner [dict get $msg "winningTeamId"]
 				set reason [dict get $msg "result" "reason"]
-
-				if {$reason eq "ResultReason_Game"} {
-					puts "Game over: Player $winner wins"
-				} elseif {$reason eq "ResultReason_Concede"} {
-					puts "Game over: Player $winner wins (other player concedes)"
-				} else {
-					puts "Game over: Player $winner wins, $reason"
-				}
-				puts "Life totals: $p_life"
+				$::logger gameOver $winner $reason $p_life
 			}
 		}
 	} {MatchGameRoomStateChangedEvent} l {
@@ -260,19 +417,9 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 		if {[dict get $game_info "stateType"] ne "MatchGameRoomStateType_Playing"} {
 			continue
 		}
-		set players [dict get $game_info "gameRoomConfig" "reservedPlayers"]
-		puts -nonewline "\nMatch between"
-		set first 1
-		foreach p $players {
-			set name [dict get $p "playerName"]
-			set seat [dict get $p "systemSeatId"]
-			if {!$first} {
-				puts -nonewline " and"
-			}
-			set first 0
-			puts -nonewline " $name (player $seat)"
-		}
-		puts ""
+		$::logger startGame [dict get $game_info "gameRoomConfig" "reservedPlayers"]
 	}
 # end of log parsing
+
+itcl::delete object $::logger
 

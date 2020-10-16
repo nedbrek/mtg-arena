@@ -234,6 +234,83 @@ proc processFile {fname args} {
 	close $f
 }
 
+proc superFromInt {t} {
+	switch $t {
+		1 { return "Basic" }
+		2 { return "Legendary" }
+	}
+	return "(invalid super-type $t)"
+}
+
+proc typeFromInt {t} {
+	switch $t {
+		1 { return "Artifact" }
+		2 { return "Creature" }
+		3 { return "Enchantment" }
+		4 { return "Instant" }
+		5 { return "Land" }
+		8 { return "Planeswalker" }
+		10 { return "Sorcery" }
+	}
+	return "(invalid type $t)"
+}
+
+proc showCard {db card_id} {
+	set t [toplevel .t.card$::t_card_num]
+	incr ::t_card_num
+
+	$db eval {
+		SELECT name_id, cost, types, sup_types, sub_types,
+		    set_name, rarity, set_num, flavor_id, power, toughness, abilities
+		FROM cards
+		WHERE card_id=$card_id
+	} {
+		set name [parse::lookupLocDb $db $name_id]
+		set is_land  [expr {[lsearch $types 5] != -1}]
+		set is_creat [expr {[lsearch $types 2] != -1}]
+		set is_plane [expr {[lsearch $types 8] != -1}]
+		set is_arti  [expr {[lsearch $types 1] != -1}]
+
+		# first row: name and cost
+		if {$is_land} {
+			grid [label $t.lName -text $name] -row 0 -column 0 -columnspan 2
+		} else {
+			grid [label $t.lName -text $name] -row 0 -column 0
+			grid [label $t.lCost -text [regsub -all "o" $cost " "]] -row 0 -column 1
+		}
+
+		# second row: type and set/rarity
+		set type_str ""
+		foreach st $sup_types {
+			append type_str "[superFromInt $st] "
+		}
+		foreach typ $types {
+			append type_str "[typeFromInt $typ] "
+		}
+		grid [label $t.lType -text $type_str] -row 1 -column 0
+		grid [label $t.lSet -text "$set_name $rarity"] -row 1 -column 1
+
+		# main text box
+		grid [text $t.tMain] -row 2 -column 0 -columnspan 2
+		foreach a $abilities {
+			$t.tMain insert end "[parse::lookupLocDb ::db $a]\n"
+		}
+		if {$flavor_id ne ""} {
+			$t.tMain insert end [parse::lookupLocDb ::db $flavor_id]
+		}
+
+		# bottom row: set num and pow/tough
+		grid [label $t.lSetNum -text $set_num] -row 3 -column 0
+		if {$is_creat} {
+			grid [label $t.lPowTough -text "$power / $toughness"] -row 3 -column 1
+		} elseif {$is_plane} {
+			grid [label $t.lPowTough -text $toughness] -row 3 -column 1
+		} elseif {$power ne "" || $toughness ne ""} {
+			grid [label $t.lPowTough -text "$power / $toughness"] -row 3 -column 1
+		}
+	}
+}
+
 # end namespace
 }
 
