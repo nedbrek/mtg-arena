@@ -5,10 +5,20 @@ package require sqlite3
 package require arena_parse
 package require Itcl
 
+proc copyTree {w} {
+	clipboard clear
+	set items [$w selection]
+	foreach i $items {
+		clipboard append "[$w item $i -text]\t[join [$w item $i -values] \t]\n"
+	}
+}
+bind Treeview <Control-c> {copyTree %W}
+
 wm withdraw .
 
 ### class definitions
 itcl::class Logger {
+	method startDeck {cards} { puts "Pure virtual called!"; exit }
 	method startGame {players} { puts "Pure virtual called!"; exit }
 	method dieRolls {rolls} { puts "Pure virtual called!"; exit }
 	method setPhase {player turn_no phase step} { puts "Pure virtual called!"; exit }
@@ -23,6 +33,10 @@ itcl::class ConsoleLogger {
 
 	destructor {
 		exit
+	}
+
+	method startDeck {cards} {
+		# TODO: make a "log level" to dump this info
 	}
 
 	method startGame {players} {
@@ -111,6 +125,26 @@ itcl::class WidgetLogger {
 		pack [scrollbar .t.fAll.vs -command "$w yview" -orient vertical] -side left -fill y
 
 		bind $w <Double-1> [list selectCardFromView %W]
+	}
+
+	method startDeck {cards} {
+		set w .t.fAll.tv
+		set r [$w insert $game_row end -text "Deck"]
+		set prev_card ""
+		set prev_item ""
+		set prev_cnt 0
+		foreach c $cards {
+			set name_id [::db onecolumn {SELECT name_id FROM cards WHERE card_id=$c}]
+			set name [parse::lookupLocDb db $name_id]
+			if {$name eq $prev_card} {
+				incr prev_cnt
+				$w item $prev_item -text "$name x $prev_cnt"
+			} else {
+				set prev_card $name
+				set prev_item [$w insert $r end -text $name -values $c]
+				set prev_cnt 1
+			}
+		}
 	}
 
 	method startGame {players} {
@@ -281,6 +315,8 @@ parse::processFile $fname {PlayerInventory.GetPlayerCards} l {
 			set type [dict get $e "type"]
 			if {$type eq "GREMessageType_DieRollResultsResp"} {
 				$::logger dieRolls [dict get $e "dieRollResultsResp" "playerDieRolls"]
+			} elseif {$type eq "GREMessageType_ConnectResp"} {
+				$::logger startDeck [dict get $e connectResp deckMessage deckCards]
 			} elseif {$type eq "GREMessageType_GameStateMessage" ||
 			    $type eq "GREMessageType_QueuedGameStateMessage"} {
 				set msg [dict get $e "gameStateMessage"]
