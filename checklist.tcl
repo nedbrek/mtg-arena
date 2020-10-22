@@ -3,6 +3,15 @@ lappend ::auto_path [file dirname $argv0]
 package require sqlite3
 package require arena_parse
 
+proc copyTree {w} {
+	clipboard clear
+	set items [$w selection]
+	foreach i $items {
+		clipboard append "[$w item $i -text]\t[join [$w item $i -values] \t]\n"
+	}
+}
+bind Treeview <Control-c> {copyTree %W}
+
 ### globals
 set set_names {
 	DAR {Dominaria}
@@ -99,6 +108,7 @@ set last_rare ""
 set set_node ""
 set last_node ""
 set last_card ""
+set all_cid ""
 db eval {
 	SELECT card_id, getName(name_id) as name, rarity, set_name, set_num
 	FROM cards
@@ -106,6 +116,7 @@ db eval {
 } {
 	set count [tmp_db onecolumn {SELECT count FROM inv WHERE card_id=$card_id}]
 	set total [tmp_db onecolumn {SELECT SUM(count) FROM inv WHERE name=$name}]
+	set rare_name [lindex $rare_names $rarity]
 
 	if {$last_set ne $set_name} {
 		set set_name $set_name
@@ -115,12 +126,19 @@ db eval {
 			set real_name [dict get $set_names $set_name]
 		}
 		set set_node [$w insert {} end -text $real_name]
-		set last_node [$w insert $set_node end -text [lindex $rare_names $rarity]]
+		set last_node [$w insert $set_node end -text $rare_name]
 		set last_card ""
+		set all_cid ""
 	} elseif {$last_rare != $rarity} {
-		set last_node [$w insert $set_node end -text [lindex $rare_names $rarity]]
+		set last_node [$w insert $set_node end -text $rare_name]
 		set last_card ""
 	}
+
+	# check for dual side cards
+	if {$set_num in $all_cid} {
+		continue
+	}
+	lappend all_cid $set_num
 
 	# check for alternate art
 	if {$name eq $last_card} {
@@ -139,9 +157,9 @@ db eval {
 		set cid [lindex $vals 5]
 		lappend cid $card_id
 
-		$w item $prev_item -values [list $set_name $rarity $count $total $set_num $cid]
+		$w item $prev_item -values [list $set_name $rare_name $count $total $set_num $cid]
 	} else {
-		set prev_item [$w insert $last_node end -text $name -values [list $set_name $rarity $count $total $set_num $card_id]]
+		set prev_item [$w insert $last_node end -text $name -values [list $set_name $rare_name $count $total $set_num $card_id]]
 	}
 
 	set last_rare $rarity

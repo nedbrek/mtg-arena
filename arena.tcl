@@ -134,3 +134,5 @@ foreach {id cnt} $last_inv {
 }
 inv_db eval {END TRANSACTION}
 
+exit
+
